@@ -6,6 +6,7 @@ import asyncio
 import os
 import sys
 import argparse
+import re
 
 
 class StateFile:
@@ -47,10 +48,11 @@ def summary():
 class Watcher(pyinotify.ProcessEvent):
     EVENT_MASK = pyinotify.IN_CREATE | pyinotify.IN_DELETE | pyinotify.IN_MODIFY | pyinotify.IN_MOVED_FROM | pyinotify.IN_MOVED_TO
 
-    def __init__(self, branch='autocommit'):
+    def __init__(self, branch='autocommit', ignore_filename_regexp=None):
         self.branch = branch
         self.loop = asyncio.get_event_loop()
         self.cwd = os.path.realpath(os.curdir)
+        self.ignore_filename_regexp=re.compile(ignore_filename_regexp) if ignore_filename_regexp else None
 
     def shorten_pathname(self, pathname):
         if pathname.startswith(self.cwd):
@@ -77,6 +79,9 @@ class Watcher(pyinotify.ProcessEvent):
     def process(self, event):
         pathname = self.shorten_pathname(event.pathname)
         if pathname.startswith('.git/'):
+            return
+        elif self.ignore_filename_regexp and self.ignore_filename_regexp.match(event.pathname):
+            print("warning: skipping event for: "+event.pathname)
             return
         self.commit_later()
 
@@ -128,7 +133,7 @@ def watch(args):
         raise Exception("A watch process is already running")
     WATCHING.state = True
     try:
-        Watcher(branch=args.watch_branch).run()
+        Watcher(branch=args.watch_branch, ignore_filename_regexp=args.ignore).run()
     finally:
         WATCHING.state = False
         COMMITTING.state = False
@@ -184,6 +189,8 @@ def main():
     subparsers = parser.add_subparsers(help="subcommands")
 
     watch_parser = subparsers.add_parser('watch', help='watch repository for changes and commit them [default]')
+    watch_parser.add_argument("-i", "--ignore", type=str, default='',
+                              help="regexp matching filenames to ignore")
     watch_parser.set_defaults(func=watch)
 
     merge_parser = subparsers.add_parser('merge', help='merge automatic commits back into normal branch')
