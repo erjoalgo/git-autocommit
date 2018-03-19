@@ -81,7 +81,7 @@ class Watcher(pyinotify.ProcessEvent):
         if pathname.startswith('.git/'):
             return
         elif self.ignore_filename_regexp and self.ignore_filename_regexp.match(event.pathname):
-            print("warning: skipping event for: "+event.pathname)
+            # print("warning: skipping event for: "+event.pathname)
             return
         self.commit_later()
 
